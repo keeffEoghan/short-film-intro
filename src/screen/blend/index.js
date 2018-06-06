@@ -35,7 +35,6 @@ export class Blend {
         if(params.shader === base.shader) {
             params.shader[1] = params.shader[1]
                 .replace(/(@<hook\W.*?)(\d+)/gim, `$1${params.views.length}`);
-            console.log(params.shader[1]);
         }
 
         this.shader = ((Array.isArray(params.shader))?

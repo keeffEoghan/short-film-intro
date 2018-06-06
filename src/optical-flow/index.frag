@@ -13,6 +13,7 @@ uniform sampler2D view;
 uniform sampler2D last;
 
 uniform vec2 viewSize;
+uniform vec2 flipUV;
 
 uniform float offset;
 uniform float lambda;
@@ -30,7 +31,6 @@ varying vec2 uv;
 #pragma glslify: posToUV = require(../map/pos-to-uv)
 
 const vec2 zero = vec2(0.0);
-const vec2 flipUV = vec2(-1.0);
 const vec3 falloff = vec3(0.0, 0.0, 1.0);
 /*
 vec4 mapColor(vec2 vec, vec2 scale) {

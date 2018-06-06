@@ -33,7 +33,6 @@ import flowSampleFrag from './spawn/pixels/flow-sample.frag';
 import dataSampleFrag from './spawn/pixels/data-sample.frag';
 
 import spawnReset from './spawn/ball';
-import GeometrySpawner from './spawn/geometry';
 
 import Player from './animate';
 
@@ -151,7 +150,7 @@ export default (canvas, options) => {
     };
 
     const flowPixelDefaults = {
-        scale: 'mirror xy'
+        scale: 'normal'
     };
 
     const flowPixelState = { ...flowPixelDefaults };
@@ -178,17 +177,6 @@ export default (canvas, options) => {
     }
 
 
-    // Respawn from geometry (platonic forms)
-
-    const geometrySpawner = new GeometrySpawner(gl, {
-        speed: 0.005,
-        bias: 100/0.005
-    });
-
-    const spawnForm = (buffer = spawnTargets.spawnForm) =>
-        geometrySpawner.shuffle().spawn(tendrils, undefined, buffer);
-
-
     // Media - video
 
     const imageShaders = {
@@ -198,8 +186,8 @@ export default (canvas, options) => {
 
     const imageSpawner = new spawnPixels.PixelSpawner(gl, { shader: null });
 
-    mat3.scale(imageSpawner.spawnMatrix,
-        mat3.identity(imageSpawner.spawnMatrix), [-1, 1]);
+    // mat3.scale(imageSpawner.spawnMatrix,
+    //     mat3.identity(imageSpawner.spawnMatrix), [-1, 1]);
 
     const rasterShape = {
         video: [0, 0]
@@ -221,7 +209,7 @@ export default (canvas, options) => {
 
     video.addEventListener('canplay', setupVideo);
 
-    // document.body.appendChild(video);
+    document.body.appendChild(video);
 
 
     function spawnRaster(shader, speed, buffer) {
@@ -282,10 +270,11 @@ export default (canvas, options) => {
         limit: 0.5
     };
 
-    const blurState = {
-        radius: 8,
-        limit: 0.2
-    };
+    const blurState = { ...blurDefaults };
+    // const blurState = {
+    //     radius: 8,
+    //     limit: 0.2
+    // };
 
     blurShader.bind();
     Object.assign(blurShader.uniforms, blurState);
@@ -363,8 +352,8 @@ export default (canvas, options) => {
             flowDecay: 0.003,
             flowWidth: 5,
 
-            speedAlpha: 0.0005,
-            colorMapAlpha: 0.5
+            speedAlpha: 0.005,
+            colorMapAlpha: 0.1
         },
         tendrils2: {
             noiseWeight: 0.0003,
@@ -381,14 +370,17 @@ export default (canvas, options) => {
             varyTarget: 1,
             lineWidth: 1
         },
-        baseColor: [1, 1, 1, 0.1],
-        flowColor: [1, 1, 1, 0.1],
+        baseColor: [1, 1, 1, 0.5],
+        flowColor: [1, 1, 1, 0.05],
         fadeColor: [0, 0, 0, 0.05],
         spawn: {
-            radius: 0.6,
-            speed: 0.1
+            radius: 0.9,
+            speed: 0.2
         },
-        opticalFlow: { ...opticalFlowDefaults },
+        opticalFlow: {
+            ...opticalFlowDefaults,
+            speed: 0.001
+        },
         blend: [1],
         blur: { ...blurState },
         calls: null
@@ -407,9 +399,59 @@ export default (canvas, options) => {
                 () => {
                     restart();
                     toggleBase('dark');
+                    spawnTargets.spawnImage = tendrils.targets;
+                    spawnImage(tendrils.targets);
                 }
             ],
             time: 200
+        });
+
+    Array(10).fill(0).forEach((v, i) =>
+        player.media.tracks.calls.to({
+            call: [() => spawnImage(null)],
+            time: 13900+(100*i)
+        }));
+
+    player.media.tracks.tendrils
+        .over(4000, {
+            to: {
+                colorMapAlpha: 1
+            },
+            time: 6000,
+            ease: [0, 0, 0, 1]
+        });
+
+    player.media.tracks.tendrils3
+        .over(2000, {
+            to: {
+                target: 0.008,
+                varyTarget: 3
+            },
+            time: 6000,
+            ease: [0, 0, 0, 1]
+        });
+
+    player.media.tracks.baseColor
+        .over(3000, {
+            to: [1, 1, 1, 0],
+            time: 6000,
+            ease: [0, 0, 0, 1]
+        });
+
+    player.media.tracks.flowColor
+        .over(3000, {
+            to: [1, 1, 1, 0],
+            time: 6000,
+            ease: [0, 0, 0, 1]
+        });
+
+    player.media.tracks.opticalFlow
+        .over(4000, {
+            to: {
+                speed: 0.12
+            },
+            time: 6000,
+            ease: [0, 0, 1, 1]
         });
 
     player.media.apply((track, key) => {
@@ -775,7 +817,6 @@ export default (canvas, options) => {
         spawnImage,
         spawnFlow,
         spawnFastest,
-        spawnForm,
         reset,
         restart,
         toggleBase,
@@ -1268,7 +1309,6 @@ export default (canvas, options) => {
             '\\': keyframeCaller(() => reset()),
             "'": keyframeCaller(() => spawnFlow()),
             ';': keyframeCaller(() => spawnFastest()),
-            ',': keyframeCaller(() => spawnForm()),
 
             '<shift>': keyframeCaller(() => restart()),
             '/': keyframeCaller(() => spawnSamples()),
