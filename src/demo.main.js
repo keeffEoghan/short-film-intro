@@ -1,40 +1,23 @@
 /**
- * A demo of the tendrils visuals - originally an interactive music video for
- * Max Cooper's "Trust".
- *
- * Disclaimer:
- * Several things done here (animation engine, audio analysis and response,
- * mouse/touch interaction, and some of the non-core shader stuff) are basically
- * learning exercises and experiments for me:
- *     - There are better approaches and libraries out there.
- *     - These were an interesting way for me to learn what might go into building
- *       these things.
- *     - There are some not very well researched, or combinations of
- *       odd/different approaches in here.
- * ...so, wouldn't take any of them as good ideas straight away.
+ * A demo of the tendrils visuals - intro shot for a short film in the RTÉ Storyland series.
  */
 
 /* global Map */
 
-import 'pepjs';
 import glContext from 'gl-context';
 import vkey from 'vkey';
-import getUserMedia from 'getusermedia';
-import analyser from 'web-audio-analyser';
-import soundCloud from 'soundcloud-badge';
-import offset from 'mouse-event-offset';
 import throttle from 'lodash/throttle';
 import mapRange from 'range-fit';
 import clamp from 'clamp';
 import { mat3, vec2 } from 'gl-matrix';
 import querystring from 'querystring';
-import toSource from 'to-source';
 import shader from 'gl-shader';
 import prefixes from 'prefixes';
 import xhr from 'xhr';
+import toSource from 'to-source';
 
-// import dat from 'dat-gui';
-import dat from '../libs/dat.gui/build/dat.gui';
+import dat from 'dat-gui';
+// import dat from '../libs/dat.gui/build/dat.gui';
 
 import { rootPath } from './utils/';
 import redirect from './utils/protocol-redirect';
@@ -51,12 +34,6 @@ import dataSampleFrag from './spawn/pixels/data-sample.frag';
 
 import spawnReset from './spawn/ball';
 import GeometrySpawner from './spawn/geometry';
-
-import AudioTrigger from './audio';
-import AudioTexture from './audio/data-texture';
-import { peak, meanWeight } from './analyse';
-
-import FlowLines from './flow-line/multi';
 
 import Player from './animate';
 
@@ -82,7 +59,12 @@ export default (canvas, options) => {
         options);
 
     const defaultSettings = defaults();
-    const defaultState = defaultSettings.state;
+    const defaultState = {
+        ...defaultSettings.state,
+        rootNum: Math.pow(2, 10)
+    };
+
+    Object.assign(defaultSettings.state, defaultState);
 
 
     // Main init
@@ -91,13 +73,14 @@ export default (canvas, options) => {
 
     const timer = {
         app: defaultSettings.timer,
-        track: new Timer(0)
+        media: new Timer(0)
     };
 
 
     // Tendrils init
 
     const tendrils = new Tendrils(gl, {
+        ...defaultSettings,
         timer: timer.app,
         numBuffers: 1
     });
@@ -137,16 +120,10 @@ export default (canvas, options) => {
     const state = tendrils.state;
 
     const appSettings = {
-        trackURL: (((''+settings.track).match(/(false|undefined)/gi))?
-                ''
-            :   decodeURIComponent(settings.track)),
-
         animate: (''+settings.animate !== 'false'),
-        useMedia: (''+settings.use_media !== 'false'),
-        pointerFlow: (''+settings.pointer_flow !== 'false'),
-        staticImage: ((settings.static_image)?
-                decodeURIComponent(settings.static_image)
-            :   rootPath+'build/images/epok/eye.png')
+        videoURL: ((settings.video)?
+                decodeURIComponent(settings.video)
+            :   rootPath+'build/videos/morph.mp4')
     };
 
     if(''+settings.cursor === 'false') {
@@ -154,252 +131,7 @@ export default (canvas, options) => {
     }
 
 
-    // Audio init
-
-    const audioDefaults = {
-        audible: (''+settings.mute !== 'true'),
-
-        track: parseFloat((settings.track_in || 1), 10),
-        trackFlowAt: 0.2, // 1.15,
-        trackFastAt: 0.03, // 0.12,
-        trackFormAt: 0.015, // 0.06,
-        trackSampleAt: 0.035, // 0.12,
-        trackCamAt: 0.002, // 0.008,
-        trackSpawnAt: 0.045, // 0.18,
-
-        mic: parseFloat((settings.mic_in || 1), 10),
-        ...((''+settings.mic_track !== 'true')?
-                {
-                    micFlowAt: 0.5,
-                    micFastAt: 0.8,
-                    micFormAt: 0.5,
-                    micSampleAt: 0.74,
-                    micCamAt: 0.06,
-                    micSpawnAt: 0.09
-                }
-            :   {
-                    // Should be the same as track above... but the input values seem to
-                    // differ when audio's rerouted to mic input.
-                    // mic: parseFloat((settings.mic_in || 0.02), 10),
-                    micFlowAt: 0.2, // 1.15,
-                    micFastAt: 0.03, // 0.12,
-                    micFormAt: 0.015, // 0.06,
-                    micSampleAt: 0.035, // 0.12,
-                    micCamAt: 0.002, // 0.008,
-                    micSpawnAt: 0.045 // 0.18
-                })
-    };
-
-
-    // Track
-
-    const track = Object.assign(new Audio(), {
-        crossOrigin: 'anonymous',
-        className: 'track'
-    });
-
-    const audioContext = new (self.AudioContext || self.webkitAudioContext)();
-
-    // Deal with Chrome's need for user interaction before playing audio...
-    // @see https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
-    document.addEventListener('click', () =>
-        (audioContext.state === 'suspended' && audioContext.resume()));
-
-
-    // Track control setup
-
-    const trackControls = document.querySelector('.epok-audio-controls');
-
-    const trackControl = (trackControls && {
-        els: {
-            main: trackControls,
-            toggle: trackControls.querySelector('.epok-play-toggle'),
-            progress: trackControls.querySelector('.epok-progress'),
-            current: trackControls.querySelector('.epok-current'),
-            total: trackControls.querySelector('.epok-total')
-        },
-        times: {
-            current: new Date(0),
-            total: new Date(0)
-        },
-        timeFormat: {
-            second: 'numeric'
-        },
-        seeking: false,
-
-        trackTimeChanged() {
-            trackControl.els.progress.max = track.duration;
-
-            const total = track.duration*1000;
-
-            trackControl.times.total.setTime(total);
-
-            trackControl.timeFormat.minute = ((total >= 60*1000)?
-                'numeric' : undefined);
-
-            trackControl.timeFormat.hour = ((total >= 60*60*1000)?
-                'numeric' : undefined);
-
-            trackControl.els.current.innerText = 0;
-
-            trackControl.els.total.innerText = trackControl.times.total
-                .toLocaleTimeString('en-gb', trackControl.timeFormat);
-        },
-        tick(time, paused) {
-            trackControl.times.current.setTime(time);
-
-            trackControl.els.current.innerText = trackControl.times.current
-                .toLocaleTimeString('en-gb', trackControl.timeFormat);
-
-            if(!trackControl.seeking) {
-                trackControl.els.progress.value = time*0.001;
-            }
-
-            trackControl.els.toggle.checked = !paused;
-        }
-    });
-
-    if(trackControl) {
-        trackControl.els.main.parentElement.removeChild(trackControl.els.main);
-        trackControl.els.main.appendChild(track);
-        trackControl.els.main.classList.add('epok-show');
-
-        track.addEventListener('durationchange', trackControl.trackTimeChanged);
-
-        trackControl.els.toggle.addEventListener('change',
-            () => ((trackControl.els.toggle.checked)?
-                track.play() : track.pause()));
-
-        trackControl.els.progress.addEventListener('pointerdown',
-            () => trackControl.seeking = true);
-
-        trackControl.els.progress.addEventListener('change', () => {
-            if(trackControl.seeking) {
-                track.currentTime = trackControl.els.progress.value;
-                trackControl.seeking = false;
-            }
-        });
-    }
-
-
-    // Analyser setup
-
-    // Convenience to mix in some things on top of the standard analyser setup.
-    function makeAnalyser(...rest) {
-        const a = analyser(...rest);
-        const gain = a.gain = a.ctx.createGain();
-        const out = (a.splitter || a.analyser);
-
-        a.source.disconnect();
-        a.source.connect(gain).connect(out);
-
-        return a;
-    }
-
-    const audioState = { ...audioDefaults };
-
-    // @todo Stereo - creates 2 separate analysers for each channel.
-    // @todo Delay node to compensate for wait in analysing values?
-
-    const trackAnalyser = makeAnalyser(track, audioContext, { audible: audioState.audible });
-
-    trackAnalyser.analyser.fftSize = Math.pow(2, 8);
-
-    const trackTrigger = new AudioTrigger(trackAnalyser, 4);
-
-
-    // Mic refs
-    let micAnalyser;
-    let micTrigger;
-
-
-    // Track setup
-
-    const setupTrack = (src, el = canvas.parentElement, onWindow = false) => {
-        if(track.src !== src) {
-            track.src = src;
-            track.currentTime = 0;
-        }
-
-        if(trackControl) {
-            const main = trackControl.els.main;
-
-            if(main.parentElement !== el) {
-                el.appendChild(main);
-            }
-
-            main.classList[((onWindow)? 'add' : 'remove')]('epok-on-window');
-        }
-
-        return track;
-    };
-
-    const setupTrackURL = (trackURL = appSettings.trackURL) => {
-        const old = document.querySelector('.epok-soundcloud');
-
-        if(old) {
-            old.parentElement.removeChild(old);
-        }
-
-        if(trackURL) {
-            if(trackURL.match(/^(https?)?(\:\/\/)?(www\.)?soundcloud\.com\//gi)) {
-                // Special setup for SoundCloud links
-                soundCloud({
-                        client_id: '75aca2e2b815f9f5d4e92916c7b80846',
-                        song: trackURL,
-                        dark: false
-                    },
-                    (e, src, data, el) => {
-                        if(e) {
-                            console.warn('Error loading track', e);
-                        }
-                        else {
-                            setupTrack(src, el.querySelector('.npm-scb-info'));
-                            el.classList.add('epok-soundcloud');
-                        }
-                    });
-            }
-            else if(trackURL.match(/^(https)?(:\/\/)?(www\.)?dropbox\.com\/s\//gi)) {
-                // Handle Dropbox share links
-                setupTrack(trackURL.replace(/^((https)?(:\/\/)?(www\.)?)dropbox\.com\/s\/(.*)\?dl=(0)$/gi,
-                        'https://dl.dropboxusercontent.com/s/$5?dl=1&raw=1'),
-                    canvas.parentElement, true);
-            }
-            else {
-                setupTrack(trackURL, canvas.parentElement, true);
-            }
-        }
-    };
-
-    setupTrackURL();
-
-
-    // Flow inputs
-
-    const flowInputs = new FlowLines(gl);
-
-    const pointerFlow = (e) => {
-        if(appSettings.pointerFlow) {
-            /**
-             * @todo Passing a `vec2` doesn't work - TypedArrays fail the test
-             *       `offset` uses.
-             */
-            // const pos = offset(e, canvas, vec2.create());
-            const pos = offset(e, canvas);
-
-            pos[0] = mapRange(pos[0], 0, tendrils.viewRes[0], -1, 1);
-            pos[1] = mapRange(pos[1], 0, tendrils.viewRes[1], 1, -1);
-
-            flowInputs.get(e.pointerId).add(timer.app.time, pos);
-
-            e.preventDefault();
-        }
-    };
-
-    canvas.addEventListener('pointermove', pointerFlow, false);
-
-
-    // Spwan feedback loop from flow
+    // Spawn feedback loop from flow
     /**
      * @todo The aspect ratio might be wrong here - always seems to converge on
      *       horizontal/vertical lines, like it were stretched.
@@ -457,7 +189,7 @@ export default (canvas, options) => {
         geometrySpawner.shuffle().spawn(tendrils, undefined, buffer);
 
 
-    // Media - cam and mic
+    // Media - video
 
     const imageShaders = {
         direct: shader(gl, spawnPixels.defaults().shader[0], pixelsFrag),
@@ -470,33 +202,34 @@ export default (canvas, options) => {
         mat3.identity(imageSpawner.spawnMatrix), [-1, 1]);
 
     const rasterShape = {
-        image: [0, 0],
         video: [0, 0]
     };
 
-    let video = null;
-    let mediaStream = null;
+    const video = Object.assign(document.createElement('video'), {
+        src: appSettings.videoURL,
+        controls: true,
+        muted: true,
+        loop: true,
+        // Autoplay causes the video to pause while offscreen in some browsers.
+        autoplay: false
+    });
 
+    function setupVideo() {
+        rasterShape.video = [video.videoWidth, video.videoHeight];
+        video.play();
+    }
 
-    const image = new Image();
+    video.addEventListener('canplay', setupVideo);
 
-    image.src = appSettings.staticImage;
-
-    image.addEventListener('load',
-        () => rasterShape.image = [image.width, image.height]);
+    // document.body.appendChild(video);
 
 
     function spawnRaster(shader, speed, buffer) {
         imageSpawner.shader = shader;
         imageSpawner.speed = speed;
 
-        let shape = rasterShape.image;
-        let raster = image;
-
-        if(appSettings.useMedia && video) {
-            shape = rasterShape.video;
-            raster = video;
-        }
+        const shape = rasterShape.video;
+        const raster = video;
 
         imageSpawner.buffer.shape = tendrils.colorMap.shape = shape;
 
@@ -527,246 +260,12 @@ export default (canvas, options) => {
     const opticalFlowDefaults = { ...opticalFlowState };
 
 
-    // Media access
-
-    function getMedia() {
-        appSettings.useMedia = true;
-
-        getUserMedia({
-                video: true,
-                audio: true
-            },
-            (e, stream) => {
-                if(e) {
-                    console.warn(e);
-                }
-                else {
-                    mediaStream = stream;
-
-                    const v = Object.assign(document.createElement('video'), {
-                        src: self.URL.createObjectURL(stream),
-                        srcObject: stream,
-                        controls: true,
-                        muted: true,
-                        autoplay: true
-                    });
-
-                    v.addEventListener('canplay', () => {
-                        video = v;
-                        rasterShape.video = [v.videoWidth, v.videoHeight];
-                    });
-
-                    micAnalyser = (micAnalyser ||
-                        makeAnalyser(stream, audioContext, { audible: false }));
-
-                    micAnalyser.analyser.fftSize = Math.pow(2, 8);
-
-                    micTrigger = (micTrigger ||
-                        new AudioTrigger(micAnalyser, 4));
-                }
-            });
-    }
-
-    function stopMedia(stream = mediaStream) {
-        appSettings.useMedia = false;
-        (stream && each((track) => track.stop(), stream.getTracks()));
-    }
-
-    const toggleMedia = (toggle = appSettings.useMedia) =>
-        ((toggle)? getMedia : stopMedia)();
-
-    if(appSettings.useMedia) {
-        getMedia();
-    }
-
-
     // Color map blending
 
-    const audioTexture = new AudioTexture(gl,
-            trackAnalyser.analyser.frequencyBinCount);
-
     const blend = new Blend(gl, {
-        views: [audioTexture.texture, opticalFlow.buffers[0]],
-        alphas: [0.3, 0.8]
+        views: [opticalFlow.buffers[0]],
+        alphas: [0.8]
     });
-
-
-    // Audio `react` and `test` function pairs - for `AudioTrigger.fire`
-    /**
-     * @todo Separate these concerns, caching different kinds of audio response
-     *       (frequencies, rate); while the callback is defined separately.
-     *
-     * @todo Move this cache stuff to `analyse` or a dedicated module, to handle
-     *       more subtle cases (like one analysis of data being used by others)?
-     *       Might need a cache per analysis function (WeakMap keyed on the
-     *       array of data), or explicit string keys.
-     */
-
-    const audioCache = new Map();
-
-    const audioFirer = (threshold, key, test) => (trigger) => {
-            const t = threshold();
-
-            if(t) {
-                const cached = audioCache.get(key);
-
-                if(cached) {
-                    return cached;
-                }
-                else {
-                    const value = test(trigger, t);
-
-                    audioCache.set(key, value);
-
-                    return value;
-                }
-            }
-            else {
-                return t;
-            }
-        };
-
-    const trackFires = [
-        [
-            () => spawnFlow(),
-            audioFirer(() => audioState.trackFlowAt,
-                'trackFlowAt | Low end - velocity | meanWeight(track, 1, 0.25)',
-                (trigger, t) => meanWeight(trigger.dataOrder(1), 0.25) > t)
-        ],
-        [
-            () => spawnFastest(),
-            audioFirer(() => audioState.trackFastAt,
-                'trackFastAt | High end - acceleration | meanWeight(track, 2, 0.8)',
-                (trigger, t) => meanWeight(trigger.dataOrder(2), 0.8) > t)
-        ],
-        [
-            () => spawnForm(),
-            audioFirer(() => audioState.trackFormAt,
-                'trackFormAt | Sudden click/hit - force/attack | abs(peak(track, 3))',
-                (trigger, t) => Math.abs(peak(trigger.dataOrder(3))) > t)
-        ],
-        [
-            () => spawnSamples(),
-            audioFirer(() => audioState.trackSampleAt,
-                'trackSampleAt | Low end - acceleration | meanWeight(track, 2, 0.25)',
-                (trigger, t) => meanWeight(trigger.dataOrder(2), 0.25) > t)
-        ],
-        [
-            () => spawnImage(),
-            audioFirer(() => audioState.trackCamAt,
-                'trackCamAt | Mid - force/attack | meanWeight(track, 3, 0.5)',
-                (trigger, t) => meanWeight(trigger.dataOrder(3), 0.5) > t)
-        ],
-        [
-            () => restart(),
-            audioFirer(() => audioState.trackSpawnAt,
-                'trackSpawnAt | Low end - acceleration | meanWeight(track, 3, 0.25)',
-                (trigger, t) => meanWeight(trigger.dataOrder(2), 0.25) > t)
-        ]
-    ];
-
-    const micFires = ((''+settings.mic_track === 'true')?
-            [
-                [
-                    () => spawnFlow(),
-                    audioFirer(() => audioState.micFlowAt,
-                        'micFlowAt | Low end - velocity | meanWeight(mic, 1, 0.25)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(1), 0.25) > t)
-                ],
-                [
-                    () => spawnFastest(),
-                    audioFirer(() => audioState.micFastAt,
-                        'micFastAt | High end - acceleration | meanWeight(mic, 2, 0.8)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(2), 0.8) > t)
-                ],
-                [
-                    () => spawnForm(),
-                    audioFirer(() => audioState.micFormAt,
-                        'micFormAt | Sudden click/hit - force/attack | abs(peak(mic, 3))',
-                        (trigger, t) => Math.abs(peak(trigger.dataOrder(3))) > t)
-                ],
-                [
-                    () => spawnSamples(),
-                    audioFirer(() => audioState.micSampleAt,
-                        'micSampleAt | Low end - acceleration | meanWeight(mic, 2, 0.25)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(2), 0.25) > t)
-                ],
-                [
-                    () => spawnImage(),
-                    audioFirer(() => audioState.micCamAt,
-                        'micCamAt | Mid - force/attack | meanWeight(mic, 3, 0.5)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(3), 0.5) > t)
-                ],
-                [
-                    () => restart(),
-                    audioFirer(() => audioState.micSpawnAt,
-                        'micSpawnAt | Low end - acceleration | meanWeight(mic, 3, 0.25)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(2), 0.25) > t)
-                ]
-            ]
-        :   [
-                [
-                    () => spawnFlow(),
-                    audioFirer(() => audioState.micFlowAt,
-                        'micFlowAt | Low end - velocity | meanWeight(mic, 1, 0.3)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(1), 0.3) > t)
-                ],
-                [
-                    () => spawnFastest(),
-                    audioFirer(() => audioState.micFastAt,
-                        'micFastAt | High end - velocity | meanWeight(mic, 1, 0.7)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(1), 0.7) > t)
-                ],
-                [
-                    () => spawnForm(),
-                    audioFirer(() => audioState.micFormAt,
-                        'micFormAt | Sudden click/hit - acceleration | abs(peak(mic, 2))',
-                        (trigger, t) => Math.abs(peak(trigger.dataOrder(2))) > t)
-                ],
-                [
-                    () => spawnSamples(),
-                    audioFirer(() => audioState.micSampleAt,
-                        'micSampleAt | Mid - velocity | meanWeight(mic, 1, 0.4)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(1), 0.4) > t)
-                ],
-                [
-                    () => spawnImage(),
-                    audioFirer(() => audioState.micCamAt,
-                        'micCamAt | Mid - acceleration | meanWeight(mic, 2, 0.6)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(2), 0.6) > t)
-                ],
-                [
-                    () => restart(),
-                    audioFirer(() => audioState.micSpawnAt,
-                        'micSpawnAt | Low end - acceleration | meanWeight(mic, 2, 0.3)',
-                        (trigger, t) => meanWeight(trigger.dataOrder(2), 0.3) > t)
-                ]
-            ]);
-
-    // Returns a function to be executed for each `fire` pair (as above)
-    const audioResponder = (trigger) => (fire) => trigger.fire(...fire);
-
-    let trackResponder;
-    let micResponder;
-
-    const audioResponse = () => {
-        // Sequential, and only one at a time, to calm the audio response
-        let soundOutput = false;
-
-        if(audioState.track > 0 && !track.paused) {
-            soundOutput = trackFires.some(trackResponder ||
-                (trackResponder = audioResponder(trackTrigger)));
-        }
-
-        if(!soundOutput && audioState.mic > 0 && micTrigger) {
-            soundOutput = micFires.some(micResponder ||
-                (micResponder = audioResponder(micTrigger)));
-        }
-
-        audioCache.clear();
-
-        return soundOutput;
-    };
 
 
     // Screen effects
@@ -817,7 +316,6 @@ export default (canvas, options) => {
         fadeColor: tendrils.state.fadeColor,
         spawn: resetSpawner.uniforms,
         opticalFlow: opticalFlowState,
-        audio: audioState,
         blend: blend.alphas,
         blur: blurState,
         // Just for calls
@@ -826,19 +324,19 @@ export default (canvas, options) => {
     };
 
     const player = {
-        // The main player, tied to the track time
-        track: new Player(map(() => [], tracks, {}), tracks),
+        // The main player, tied to the media time
+        media: new Player(map(() => [], tracks, {}), tracks),
 
         // A miscellaneous player, time to app time
         app: new Player({ main: [] }, { main: tendrils.state })
     };
 
-    // timer.track.end = player.track.end()+2000;
-    // timer.track.loop = true;
+    // timer.media.end = player.media.end()+2000;
+    // timer.media.loop = true;
 
-    track.addEventListener('seeked',
+    video.addEventListener('seeked',
         () => (appSettings.animate &&
-            player.track.playFrom(track.currentTime*1000, 0)));
+            player.media.playFrom(video.currentTime*1000, 0)));
 
 
     // @todo Test sequence - move to own file?
@@ -883,25 +381,24 @@ export default (canvas, options) => {
             varyTarget: 1,
             lineWidth: 1
         },
-        baseColor: [0, 0, 0, 0.9],
+        baseColor: [1, 1, 1, 0.1],
         flowColor: [1, 1, 1, 0.1],
-        fadeColor: [1, 1, 1, 0.05],
+        fadeColor: [0, 0, 0, 0.05],
         spawn: {
             radius: 0.6,
             speed: 0.1
         },
         opticalFlow: { ...opticalFlowDefaults },
-        audio: { ...audioDefaults },
-        blend: [0, 1],
+        blend: [1],
         blur: { ...blurState },
         calls: null
     };
 
-    // Restart, clean slate; begin with the inert, big bang - flow only
+    // Restart, clean slate
 
     const trackStartTime = 60;
 
-    player.track.tracks.calls.to({
+    player.media.tracks.calls.to({
             call: [() => reset()],
             time: trackStartTime
         })
@@ -915,7 +412,7 @@ export default (canvas, options) => {
             time: 200
         });
 
-    player.track.apply((track, key) => {
+    player.media.apply((track, key) => {
         const apply = tracksStart[key];
 
         track.to({
@@ -925,62 +422,6 @@ export default (canvas, options) => {
 
         return { apply };
     });
-
-
-    // Intro info
-
-    const intro = {
-        togglers: Array.from(document.querySelectorAll('.epok-info-more-button')),
-        more: document.querySelector('.epok-info-more'),
-
-        toggle(toggle) {
-            const show = ((typeof toggle !== 'undefined')?
-                    toggle
-                :   intro.more.classList.contains('epok-hide'));
-
-            if(show) {
-                intro.more.classList.remove('epok-hide');
-            }
-            else {
-                intro.more.classList.add('epok-hide');
-            }
-        }
-    };
-
-    intro.togglers.forEach((moreToggler) =>
-        moreToggler.addEventListener('click', () => intro.toggle()));
-
-
-    // Quality settings
-
-    const quality = {
-        options: [
-            {
-                rootNum: defaultState.rootNum,
-                damping: defaultState.damping
-            },
-            {
-                rootNum: defaultState.rootNum*2,
-                damping: defaultState.damping-0.001
-            }
-        ],
-        level: parseInt((settings.quality ||
-                ((Math.max(window.innerWidth, window.innerHeight) < 800)? 0 : 1)),
-            10),
-
-        change(level = (quality.level+1)%quality.options.length) {
-            const settings = quality.options[level];
-
-            tendrils.setup(settings.rootNum);
-            Object.assign(state, settings);
-            restart();
-
-            quality.level = level;
-        },
-        step: () => quality.change()
-    };
-
-    quality.change(quality.level);
 
 
     // Fullscreen
@@ -1000,31 +441,17 @@ export default (canvas, options) => {
 
         player.app.play(timer.app.time);
 
-        if(track && track.currentTime >= 0) {
-            timer.track.tick(track.currentTime*1000);
+        if(video.currentTime >= 0) {
+            timer.media.tick(video.currentTime*1000);
 
             if(appSettings.animate) {
-                player.track.play(timer.track.time);
-            }
-
-            if(trackControl) {
-                trackControl.tick(timer.track.time, track.paused);
+                player.media.play(timer.media.time);
             }
         }
 
-        /**
-         * @todo Spectogram with frequencies on x-axis, waveform on y; or
-         *       something better than this 1D list.
-         */
-        audioTexture.frequencies(trackTrigger.dataOrder(0)).apply();
-
         // Blend the color maps into tendrils one
         // @todo Only do this if necessary (skip if none or only one has alpha)
-
-        blend.views[1] = ((appSettings.useMedia && video)?
-                opticalFlow.buffers[0]
-            :   imageSpawner.buffer);
-
+        blend.views[0] = opticalFlow.buffers[0];
         blend.draw(tendrils.colorMap);
 
         // The main event
@@ -1058,26 +485,13 @@ export default (canvas, options) => {
         tendrils.flow.bind();
 
 
-        // Flow lines
-
-        flowInputs.trim(1/tendrils.state.flowDecay, timer.app.time);
-
-        if(appSettings.pointerFlow) {
-            each((flowLine) => {
-                    Object.assign(flowLine.line.uniforms, tendrils.state);
-                    flowLine.update().draw();
-                },
-                flowInputs.active);
-        }
-
-
         // Optical flow
 
         // @todo Replace the image color map with one of these textures updated each frame.
         // @todo Blur for optical flow? Maybe Sobel as well?
         // @see https://github.com/princemio/ofxMIOFlowGLSL/blob/master/src/ofxMioFlowGLSL.cpp
 
-        if(appSettings.useMedia && video) {
+        if(rasterShape.video[0]+rasterShape.video[1] > 0) {
             opticalFlow.resize(rasterShape.video);
             opticalFlow.setPixels(video);
 
@@ -1094,28 +508,6 @@ export default (canvas, options) => {
 
             opticalFlow.step();
         }
-
-
-        // React to sound - from highest reaction to lowest, max one per frame
-
-        if(trackTrigger) {
-            trackAnalyser.gain.gain
-                // So we don't blow any speakers...
-                .linearRampToValueAtTime(clamp(audioState.track, 0, 1),
-                    trackAnalyser.ctx.currentTime+0.5);
-
-            trackTrigger.sample(dt);
-        }
-
-        if(micTrigger) {
-            micAnalyser.gain.gain
-                .linearRampToValueAtTime(clamp(audioState.mic, 0, 10000),
-                    micAnalyser.ctx.currentTime+0.5);
-
-            micTrigger.sample(dt);
-        }
-
-        audioResponse();
     }
 
 
@@ -1140,8 +532,7 @@ export default (canvas, options) => {
 
     const gui = {
         main: new dat.GUI({ autoPlace: false }),
-        showing: (''+settings.edit !== 'false'),
-        toggle: document.querySelector('.epok-editor-button')
+        showing: (''+settings.edit !== 'false')
     };
 
     const containGUI = Object.assign(document.createElement('div'), {
@@ -1178,27 +569,13 @@ export default (canvas, options) => {
         gui.showing = show;
     }
 
-    (gui.toggle &&
-        gui.toggle.addEventListener('click', () => toggleShowGUI()));
-
     // Types of simple properties the GUI can handle with `.add`
     const simpleGUIRegEx = /^(object|array|undefined|null)$/gi;
 
 
-    // Info
-
-    const proxyGUI = {
-        info: intro.toggle
-    };
-
-    gui.main.add(proxyGUI, 'info');
-
-
     // Root level
 
-    const rootControls = {
-        changeQuality: quality.step
-    };
+    const rootControls = {};
 
     if(fullscreen) {
         rootControls.fullscreen = fullscreen.request;
@@ -1209,10 +586,10 @@ export default (canvas, options) => {
 
     const keyframe = (to = { ...state }, call = null) =>
         // @todo Apply full state to each player track
-        player.track.tracks.tendrils.smoothTo({
+        player.media.tracks.tendrils.smoothTo({
             to,
             call,
-            time: timer.track.time,
+            time: timer.media.time,
             ease: [0, 0.95, 1]
         });
 
@@ -1225,30 +602,23 @@ export default (canvas, options) => {
                 location.href.replace((location.search || /$/gi),
                     '?'+querystring.encode({
                         ...settings,
-                        track: encodeURIComponent(appSettings.trackURL),
-                        mute: !audioState.audible,
-                        track_in: audioState.track,
-                        mic_in: audioState.mic,
-                        use_media: appSettings.useMedia,
+                        video: encodeURIComponent(appSettings.videoURL),
                         animate: appSettings.animate
                     }))),
-            showState: () => showExport(`Current state (@${timer.track.time}):`,
-                toSource(player.track.tracks)),
+            showState: () => showExport(`Current state (@${timer.media.time}):`,
+                toSource(player.media.tracks)),
             showSequence: () => showExport('Animation sequence:',
-                toSource(player.track.frames({}))),
+                toSource(player.media.frames({}))),
 
             keyframe
         });
 
-
-    gui.main.add(appSettings, 'trackURL').onFinishChange(setupTrackURL);
-
     gui.main.add(appSettings, 'animate');
 
-    gui.main.add(appSettings, 'useMedia').onFinishChange(() => toggleMedia());
-
-    gui.main.add(appSettings, 'staticImage').onFinishChange(() =>
-            image.src = appSettings.staticImage);
+    gui.main.add(appSettings, 'videoURL').onFinishChange(() => {
+        rasterShape.video = [0, 0];
+        video.src = appSettings.videoURL;
+    });
 
     each((f, control) => gui.main.add(rootControls, control), rootControls);
 
@@ -1318,7 +688,7 @@ export default (canvas, options) => {
 
     gui.blend = gui.main.addFolder('color blend');
 
-    const blendKeys = ['audio', 'video'];
+    const blendKeys = ['video'];
     const blendProxy = reduce((proxy, k, i) => {
             proxy[k] = blend.alphas[i];
 
@@ -1381,28 +751,6 @@ export default (canvas, options) => {
     const timeSettings = ['paused', 'step', 'rate', 'end', 'loop'];
 
     timeSettings.forEach((t) => gui.time.add(timer.app, t));
-
-
-    // Audio
-
-    gui.audio = gui.main.addFolder('audio');
-
-    for(let s in audioState) {
-        const control = gui.audio.add(audioState, s);
-
-        if(s === 'audible') {
-            control.onChange((v) => {
-                const out = (trackAnalyser.merger || trackAnalyser.analyser);
-
-                if(v) {
-                    out.connect(trackAnalyser.ctx.destination);
-                }
-                else {
-                    out.disconnect();
-                }
-            });
-        }
-    }
 
 
     // Blur
@@ -1544,7 +892,6 @@ export default (canvas, options) => {
             });
 
             Object.assign(blendProxy, {
-                audio: 0.9,
                 video: 0
             });
 
@@ -1770,13 +1117,13 @@ export default (canvas, options) => {
      * @todo Use the above to play the visuals and set keyframes in real time?
      */
     function keyMash() {
-        // Quick track control
+        // Quick video control
 
-        const togglePlay = (play = track.paused) =>
-            ((play)? track.play() : track.pause());
+        const togglePlay = (play = video.paused) =>
+            ((play)? video.play() : video.pause());
 
         const scrub = (by) => {
-            track.currentTime += by*0.001;
+            video.currentTime += by*0.001;
             togglePlay(true);
         };
 
@@ -1915,8 +1262,8 @@ export default (canvas, options) => {
             '<enter>': keyframe,
             // @todo Update this to match the new Player API
             '<backspace>': () =>
-                player.track.trackAt(timer.track.time)
-                    .spliceAt(timer.track.time),
+                player.media.trackAt(timer.media.time)
+                    .spliceAt(timer.media.time),
 
             '\\': keyframeCaller(() => reset()),
             "'": keyframeCaller(() => spawnFlow()),
@@ -2000,8 +1347,6 @@ export default (canvas, options) => {
         tendrils,
         tracks,
         defaultState,
-        audioDefaults,
-        toggleMedia,
         timer
     };
 

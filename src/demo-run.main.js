@@ -28,12 +28,12 @@ function updateState() {
         let callback = readyCallbacks[readyStates[last]];
 
         if(callback) {
-            try {
+            // try {
                 callback();
-            }
-            catch(e) {
-                console.error(e);
-            }
+            // }
+            // catch(e) {
+            //     console.error(e);
+            // }
         }
     }
 }
