@@ -430,11 +430,11 @@ export default (canvas, options) => {
             time: 200
         });
 
-    Array(10).fill(0).forEach((v, i) =>
-        player.media.tracks.calls.to({
-            call: [() => spawnImage(null)],
-            time: 13900+(100*i)
-        }));
+    // Array(10).fill(0).forEach((v, i) =>
+    //     player.media.tracks.calls.to({
+    //         call: [() => spawnImage(null)],
+    //         time: 13900+(100*i)
+    //     }));
 
     player.media.tracks.tendrils
         .over(4000, {
