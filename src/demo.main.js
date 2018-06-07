@@ -194,21 +194,37 @@ export default (canvas, options) => {
     };
 
     const video = Object.assign(document.createElement('video'), {
-        src: appSettings.videoURL,
         controls: true,
         muted: true,
         loop: true,
         // Autoplay causes the video to pause while offscreen in some browsers.
-        autoplay: false
+        autoplay: false,
+        crossorigin: 'anonymous'
     });
 
-    function setupVideo() {
+    video.addEventListener('canplay', () => {
         rasterShape.video = [video.videoWidth, video.videoHeight];
         video.play();
-    }
+    });
 
-    video.addEventListener('canplay', setupVideo);
+    const mediaSrc = (src = appSettings.videoURL) =>
+        ((src.match(/^((https)?(:\/\/)?(www\.)?)drive\.google\.com\/(file\/d\/|open\?id\=)/gi))?
+            // Handle Drive share links
+            // https://drive.google.com/file/d/{ID}/view
+            // https://drive.google.com/open?id={ID}
+            src.replace(/^((https)?(:\/\/)?(www\.)?)drive\.google\.com\/(file\/d\/|open\?id\=)(.*?)(\/|\?|$).*?$/gi,
+                    'https://drive.google.com/uc?export=&confirm=no_antivirus&id=$6')
 
+        : ((src.match(/^(https)?(:\/\/)?(www\.)?dropbox\.com\/s\//gi))?
+            // Handle Dropbox share links
+            // https://www.dropbox.com/s/{ID}?dl=0
+            // https://www.dropbox.com/sh/{ID}?dl=0
+            src.replace(/^((https)?(:\/\/)?(www\.)?)dropbox\.com\/sh?\/(.*)\?.*$/gi,
+                    'https://dl.dropboxusercontent.com/s/$5?dl=1&raw=1')
+            // Plain URLs otherwise - and handle falsey.
+        :   src || ''));
+
+    video.src = mediaSrc();
     document.body.appendChild(video);
 
 
@@ -219,10 +235,18 @@ export default (canvas, options) => {
         const shape = rasterShape.video;
         const raster = video;
 
-        imageSpawner.buffer.shape = tendrils.colorMap.shape = shape;
+        if(Math.max(...shape) > 0) {
+            imageSpawner.buffer.shape = tendrils.colorMap.shape = shape;
 
-        imageSpawner.setPixels(raster);
-        imageSpawner.spawn(tendrils, undefined, buffer);
+            try {
+                imageSpawner.setPixels(raster);
+            }
+            catch(e) {
+                console.warn(e);
+            }
+
+            imageSpawner.spawn(tendrils, undefined, buffer);
+        }
     }
 
     const spawnImage = (buffer = spawnTargets.spawnImage) =>
@@ -533,9 +557,15 @@ export default (canvas, options) => {
         // @todo Blur for optical flow? Maybe Sobel as well?
         // @see https://github.com/princemio/ofxMIOFlowGLSL/blob/master/src/ofxMioFlowGLSL.cpp
 
-        if(rasterShape.video[0]+rasterShape.video[1] > 0) {
+        if(video.readyState > 1 && !video.paused && Math.min(...rasterShape.video) > 0) {
             opticalFlow.resize(rasterShape.video);
-            opticalFlow.setPixels(video);
+
+            try {
+                opticalFlow.setPixels(video);
+            }
+            catch(e) {
+                console.warn(e);
+            }
 
             if(opticalFlowState.speed) {
                 opticalFlow.update({
@@ -657,10 +687,7 @@ export default (canvas, options) => {
 
     gui.main.add(appSettings, 'animate');
 
-    gui.main.add(appSettings, 'videoURL').onFinishChange(() => {
-        rasterShape.video = [0, 0];
-        video.src = appSettings.videoURL;
-    });
+    gui.main.add(appSettings, 'videoURL').onFinishChange(() => video.src = mediaSrc());
 
     each((f, control) => gui.main.add(rootControls, control), rootControls);
 
