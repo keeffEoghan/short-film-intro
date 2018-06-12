@@ -43,7 +43,7 @@ video { width: 100%; }
 /* Quick fix for a broken DAT.GUI style */
 .hue-field { width: 13px !important; }
 
-.epok-edit-controls { position: absolute; display: -webkit-box; display: -webkit-flex; display: -ms-flexbox; display: flex; -webkit-box-orient: vertical; -webkit-box-direction: normal; -webkit-flex-flow: column nowrap; -ms-flex-flow: column nowrap; flex-flow: column nowrap; -webkit-box-pack: stretch; -webkit-justify-content: stretch; -ms-flex-pack: stretch; justify-content: stretch; top: 0; right: 0; max-height: 100%; padding-bottom: 20px; z-index: 1000; -webkit-transition: opacity 300ms ease-out; transition: opacity 300ms ease-out; }
+.epok-edit-controls { position: fixed; display: -webkit-box; display: -webkit-flex; display: -ms-flexbox; display: flex; -webkit-box-orient: vertical; -webkit-box-direction: normal; -webkit-flex-flow: column nowrap; -ms-flex-flow: column nowrap; flex-flow: column nowrap; -webkit-box-pack: stretch; -webkit-justify-content: stretch; -ms-flex-pack: stretch; justify-content: stretch; top: 0; right: 0; max-height: 100%; padding-bottom: 20px; z-index: 1000; -webkit-transition: opacity 300ms ease-out; transition: opacity 300ms ease-out; }
 
 .epok-edit-controls.epok-hide { opacity: 0; pointer-events: none; }
 
