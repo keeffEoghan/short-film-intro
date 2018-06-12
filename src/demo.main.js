@@ -122,7 +122,7 @@ export default (canvas, options) => {
         animate: (''+settings.animate !== 'false'),
         videoURL: ((settings.video)?
                 decodeURIComponent(settings.video)
-            :   rootPath+'build/videos/morph.mp4')
+            :   rootPath+'build/videos/morph-long.mp4')
     };
 
     if(''+settings.cursor === 'false') {
@@ -225,7 +225,12 @@ export default (canvas, options) => {
         :   src || ''));
 
     video.src = mediaSrc();
-    document.body.appendChild(video);
+    // document.body.appendChild(video);
+    document.body.insertBefore(video, canvas);
+
+    if(canvas.scrollIntoView) {
+        canvas.scrollIntoView();
+    }
 
 
     function spawnRaster(shader, speed, buffer) {
@@ -294,11 +299,11 @@ export default (canvas, options) => {
         limit: 0.5
     };
 
-    const blurState = { ...blurDefaults };
-    // const blurState = {
-    //     radius: 8,
-    //     limit: 0.2
-    // };
+    const blurState = {
+        ...blurDefaults,
+        radius: 5,
+        limit: 0.4
+    };
 
     blurShader.bind();
     Object.assign(blurShader.uniforms, blurState);
@@ -380,8 +385,8 @@ export default (canvas, options) => {
             colorMapAlpha: 0.1
         },
         tendrils2: {
-            noiseWeight: 0.0003,
-            varyNoise: 0.3,
+            noiseWeight: 0.0004,
+            varyNoise: 1,
 
             noiseScale: 1.5,
             varyNoiseScale: 1,
@@ -395,11 +400,11 @@ export default (canvas, options) => {
             lineWidth: 1
         },
         baseColor: [1, 1, 1, 0.5],
-        flowColor: [1, 1, 1, 0.05],
+        flowColor: [1, 1, 1, 0.1],
         fadeColor: [0, 0, 0, 0.05],
         spawn: {
-            radius: 0.9,
-            speed: 0.2
+            radius: 0.4,
+            speed: 0.07
         },
         opticalFlow: {
             ...opticalFlowDefaults,
@@ -427,55 +432,7 @@ export default (canvas, options) => {
                     spawnImage(tendrils.targets);
                 }
             ],
-            time: 200
-        });
-
-    // Array(10).fill(0).forEach((v, i) =>
-    //     player.media.tracks.calls.to({
-    //         call: [() => spawnImage(null)],
-    //         time: 13900+(100*i)
-    //     }));
-
-    player.media.tracks.tendrils
-        .over(4000, {
-            to: {
-                colorMapAlpha: 1
-            },
-            time: 6000,
-            ease: [0, 0, 0, 1]
-        });
-
-    player.media.tracks.tendrils3
-        .over(2000, {
-            to: {
-                target: 0.008,
-                varyTarget: 3
-            },
-            time: 6000,
-            ease: [0, 0, 0, 1]
-        });
-
-    player.media.tracks.baseColor
-        .over(3000, {
-            to: [1, 1, 1, 0],
-            time: 6000,
-            ease: [0, 0, 0, 1]
-        });
-
-    player.media.tracks.flowColor
-        .over(3000, {
-            to: [1, 1, 1, 0],
-            time: 6000,
-            ease: [0, 0, 0, 1]
-        });
-
-    player.media.tracks.opticalFlow
-        .over(4000, {
-            to: {
-                speed: 0.12
-            },
-            time: 6000,
-            ease: [0, 0, 1, 1]
+            time: 100
         });
 
     player.media.apply((track, key) => {
@@ -488,6 +445,91 @@ export default (canvas, options) => {
 
         return { apply };
     });
+
+    // Animation sequence
+    (() => {
+        // Array(10).fill(0).forEach((v, i) =>
+        //     player.media.tracks.calls.to({
+        //         call: [() => spawnImage(null)],
+        //         time: 13900+(100*i)
+        //     }));
+
+        player.media.tracks.tendrils
+            .over(9000, {
+                to: {
+                    colorMapAlpha: 1
+                },
+                time: 16000,
+                ease: [0, 0, 0, 1]
+            });
+
+        player.media.tracks.tendrils2
+            .to({
+                to: {
+                    noiseWeight: 0.001
+                },
+                time: 6000,
+                ease: [0, 0, 0, 1]
+            });
+
+        player.media.tracks.tendrils3
+            .over(8000, {
+                to: {
+                    target: 0.0003,
+                    varyTarget: 20
+                },
+                time: 13000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothTo({
+                to: {
+                    target: 0.1,
+                    varyTarget: 5
+                },
+                time: 15000,
+                ease: [0, 0, 0, 1]
+            });
+
+        player.media.tracks.baseColor
+            .to({
+                to: [1, 1, 1, 0.8],
+                time: 1000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothOver(7000, {
+                to: [1, 1, 1, 0],
+                time: 17000,
+                ease: [0, 0, 0, 1]
+            });
+
+        player.media.tracks.flowColor
+            .to({
+                to: [1, 1, 1, 0.25],
+                time: 3000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothTo({
+                to: [1, 1, 1, 0],
+                time: 16000,
+                ease: [0, 0, 0.6, 1]
+            });
+
+        player.media.tracks.opticalFlow
+            .over(7000, {
+                to: {
+                    speed: 0.03
+                },
+                time: 12000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothTo({
+                to: {
+                    speed: 0.3
+                },
+                time: 17000,
+                ease: [0, 0, 0, 1]
+            });
+    })();
 
 
     // Fullscreen
