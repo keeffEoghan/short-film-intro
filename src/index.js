@@ -76,7 +76,9 @@ export const defaults = () => ({
 
 export const glSettings = {
     preserveDrawingBuffer: true,
-    antialias: true
+    antialias: true,
+    depth: false,
+    stencil: false
 };
 
 
