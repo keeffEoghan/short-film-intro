@@ -304,7 +304,8 @@ export default (canvas, options) => {
 
     const blurState = {
         ...blurDefaults,
-        radius: 5,
+        // radius: 5,
+        radius: 0,
         limit: 0.4
     };
 
@@ -384,34 +385,34 @@ export default (canvas, options) => {
             flowDecay: 0.003,
             flowWidth: 5,
 
-            speedAlpha: 0.05,
+            speedAlpha: 0.02,
             colorMapAlpha: 0.1
         },
         tendrils2: {
-            noiseWeight: 0.0005,
+            noiseWeight: 0.0007,
             varyNoise: 2,
 
-            noiseScale: 15,
-            varyNoiseScale: 0.5,
+            noiseScale: 16,
+            varyNoiseScale: 0.25,
 
             noiseSpeed: 0.0004,
             varyNoiseSpeed: 0.05,
         },
         tendrils3: {
-            target: 0.000005,
-            varyTarget: 1,
+            target: 0.00002,
+            varyTarget: 8,
             lineWidth: 1
         },
-        baseColor: [1, 1, 1, 0],
-        flowColor: [1, 1, 1, 0],
+        baseColor: [1, 1, 1, 0.6],
+        flowColor: [1, 1, 1, 0.1],
         fadeColor: [0, 0, 0, 0.05],
         spawn: {
             radius: 0.4,
-            speed: 0.07
+            speed: 0.1
         },
         opticalFlow: {
             ...opticalFlowDefaults,
-            speed: 0.001
+            speed: 0.0015
         },
         blend: [1],
         blur: { ...blurState },
@@ -458,71 +459,79 @@ export default (canvas, options) => {
         //     }));
 
         player.media.tracks.tendrils
-            .over(16000-2000, {
+            .over(16000-5000, {
                 to: {
                     colorMapAlpha: 1
                 },
                 time: 16000,
-                ease: [0, 0.2, 0.8, 1]
+                ease: [0, 0, 0.5, 1]
             });
 
         player.media.tracks.tendrils2
-            .to({
+            .over(5000-2000, {
                 to: {
-                    noiseWeight: 0.0035,
-                    noiseScale: 1.5
+                    noiseWeight: 0.005,
+                    noiseScale: 2
                 },
-                time: 6000,
-                ease: [0, 0, 0.8, 1]
+                time: 5000,
+                ease: [0, 0.3, 0.8, 1]
             })
             .smoothTo({
                 to: {
-                    noiseWeight: 0.0015,
-                    noiseScale: 0.8
+                    noiseWeight: 0.0005,
+                    noiseScale: 1
                 },
-                time: 12000,
-                ease: [0, 0.5, 1, 1]
+                time: 15000,
+                ease: [0, 0.8, 1, 1]
             });
 
         player.media.tracks.tendrils3
-            .over(13000-5000, {
+            .over(10000-3000, {
                 to: {
                     target: 0.0003,
-                    varyTarget: 20
+                    varyTarget: 27
                 },
-                time: 13000,
-                ease: [0, 0, 0.2, 1]
+                time: 10000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothOver(15000-12000, {
+                to: {
+                    target: 0.0005,
+                    varyTarget: 60
+                },
+                time: 15000,
+                ease: [0, 0, 0.7, 1]
             })
             .smoothTo({
                 to: {
-                    target: 0.1,
-                    varyTarget: 3
+                    target: 0.08,
+                    varyTarget: 1
                 },
-                time: 15000,
-                ease: [0, 0, 0, 1]
+                time: 17000,
+                ease: [0, 0.2, 1, 1]
             });
 
         player.media.tracks.baseColor
             .to({
                 to: [1, 1, 1, 0.8],
-                time: 2000,
-                ease: [0, 0, 0.5, 1]
+                time: 5500,
+                ease: [0, 0.4, 0.7, 1]
             })
             .smoothTo({
                 to: [1, 1, 1, 0],
-                time: 8000,
-                ease: [0, 0, 0, 1]
+                time: 12000,
+                ease: [0, 0.6, 0.8, 1]
             });
 
         player.media.tracks.flowColor
             .to({
-                to: [1, 1, 1, 0.1],
+                to: [1, 1, 1, 0.075],
                 time: 2000,
                 ease: [0, 0, 0, 1]
             })
             .smoothTo({
                 to: [1, 1, 1, 0],
-                time: 19000,
+                time: 17000,
                 ease: [0, 0, 0.5, 1]
             });
 
