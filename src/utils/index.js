@@ -19,4 +19,5 @@ export const nextPow2 = (x) => Math.pow(2, Math.ceil(Math.log(x)*invLog2));
 // @todo Coupled to the hosting setup - remove where not relevant.
 export const rootPath =
     `/${((location.href.match(/:\/\/.+?\/([^\/\?]+?(?=[\/\?]|$))?/i) || [])[1] || '')}/`
+        .replace(/[^\.]*\.[^\.]*$/gi, '/')
         .replace(/\/+/gi, '/');
