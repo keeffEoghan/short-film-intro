@@ -376,39 +376,43 @@ export default (canvas, options) => {
             // damping: 0.043,
             // speedLimit: 0.01,
 
-            forceWeight: 0.017,
-            varyForce: -0.25,
+            // Less splash
+            forceWeight: 0.016,
+            varyForce: 0,
+            // More splash
+            // forceWeight: 0.017,
+            // varyForce: -0.3,
 
-            flowWeight: 1,
-            varyFlow: 0.3,
+            flowWeight: 1.2,
+            varyFlow: -1,
 
             flowDecay: 0.003,
             flowWidth: 5,
 
             speedAlpha: 0.02,
-            colorMapAlpha: 0.1
+            colorMapAlpha: 0
         },
         tendrils2: {
-            noiseWeight: 0.0007,
-            varyNoise: 2,
+            noiseWeight: 0.0002,
+            varyNoise: 0,
 
-            noiseScale: 16,
-            varyNoiseScale: 0.25,
+            noiseScale: 20,
+            varyNoiseScale: 0.1,
 
             noiseSpeed: 0.0004,
             varyNoiseSpeed: 0.05,
         },
         tendrils3: {
-            target: 0.00002,
-            varyTarget: 8,
+            target: 0,
+            varyTarget: 100,
             lineWidth: 1
         },
-        baseColor: [1, 1, 1, 0.6],
-        flowColor: [1, 1, 1, 0.1],
+        baseColor: [1, 1, 1, 0.1],
+        flowColor: [1, 1, 1, 0],
         fadeColor: [0, 0, 0, 0.05],
         spawn: {
-            radius: 0.4,
-            speed: 0.1
+            radius: 0.5,
+            speed: 0.5
         },
         opticalFlow: {
             ...opticalFlowDefaults,
@@ -459,91 +463,103 @@ export default (canvas, options) => {
         //     }));
 
         player.media.tracks.tendrils
-            .over(16000-5000, {
+            .to({
                 to: {
-                    colorMapAlpha: 1
+                    colorMapAlpha: 1.1
                 },
-                time: 16000,
-                ease: [0, 0, 0.5, 1]
+                time: 14000,
+                ease: [0, 0.2, 0.2, 1]
             });
 
         player.media.tracks.tendrils2
-            .over(5000-2000, {
+            .to({
                 to: {
-                    noiseWeight: 0.005,
+                    // More wings
+                    noiseWeight: 0.004,
+                    varyNoise: -4,
+                    // Less wings
+                    // noiseWeight: 0.002,
+                    // varyNoise: 1,
                     noiseScale: 2
                 },
-                time: 5000,
-                ease: [0, 0.3, 0.8, 1]
+                time: 4000,
+                ease: [0, 0, 1, 1]
             })
             .smoothTo({
                 to: {
-                    noiseWeight: 0.0005,
-                    noiseScale: 1
-                },
-                time: 15000,
-                ease: [0, 0.8, 1, 1]
-            });
-
-        player.media.tracks.tendrils3
-            .over(10000-3000, {
-                to: {
-                    target: 0.0003,
-                    varyTarget: 27
+                    noiseWeight: 0.0002,
+                    noiseScale: 0.5
                 },
                 time: 10000,
                 ease: [0, 0, 0, 1]
-            })
-            .smoothOver(15000-12000, {
+            });
+
+        player.media.tracks.tendrils3
+            .to({
                 to: {
-                    target: 0.0005,
-                    varyTarget: 60
+                    target: 0.0000001,
+                    varyTarget: 10
                 },
-                time: 15000,
-                ease: [0, 0, 0.7, 1]
+                time: 3000,
+                ease: [0, 0, 0, 1]
             })
             .smoothTo({
                 to: {
-                    target: 0.08,
+                    target: 0.00003,
+                    varyTarget: 60
+                },
+                time: 6000,
+                ease: [0, 0, 0.6, 1]
+            })
+            .smoothTo({
+                to: {
+                    target: 0.0003
+                },
+                time: 11000,
+                ease: [0, 0, 0, 1]
+            })
+            .smoothTo({
+                to: {
+                    target: 0.1,
                     varyTarget: 1
                 },
-                time: 17000,
-                ease: [0, 0.2, 1, 1]
+                time: 14000,
+                ease: [0, 0, 0.7, 1]
             });
 
         player.media.tracks.baseColor
             .to({
-                to: [1, 1, 1, 0.8],
-                time: 5500,
-                ease: [0, 0.4, 0.7, 1]
+                to: [1, 1, 1, 0.7],
+                time: 1000,
+                ease: [0, 0, 1, 1]
             })
             .smoothTo({
                 to: [1, 1, 1, 0],
-                time: 12000,
-                ease: [0, 0.6, 0.8, 1]
+                time: 14000,
+                ease: [0, 0, 0, 1]
             });
 
         player.media.tracks.flowColor
             .to({
-                to: [1, 1, 1, 0.075],
-                time: 2000,
-                ease: [0, 0, 0, 1]
+                to: [1, 1, 1, 0.1],
+                time: 5000,
+                ease: [0, 0, 1, 1]
             })
             .smoothTo({
                 to: [1, 1, 1, 0],
-                time: 17000,
-                ease: [0, 0, 0.5, 1]
+                time: 16000,
+                ease: [0, 0, 1, 1]
             });
 
         player.media.tracks.fadeColor
-            .over(19000-16000, {
+            .over(18000-4000, {
                 to: [0, 0, 0, 0.1],
-                time: 19000,
-                ease: [0, 0, 0, 1]
+                time: 18000,
+                ease: [0, 0.1, 0.3, 1]
             });
 
         player.media.tracks.opticalFlow
-            .over(12000-5000, {
+            .over(12000-6000, {
                 to: {
                     speed: 0.05
                 },
