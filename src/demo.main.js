@@ -389,18 +389,18 @@ export default (canvas, options) => {
             flowDecay: 0.003,
             flowWidth: 5,
 
-            speedAlpha: 0.02,
+            speedAlpha: 0.04,
             colorMapAlpha: 0
         },
         tendrils2: {
-            noiseWeight: 0.0002,
+            noiseWeight: 0.0001,
             varyNoise: 0,
 
-            noiseScale: 20,
+            noiseScale: 40,
             varyNoiseScale: 0.1,
 
-            noiseSpeed: 0.0004,
-            varyNoiseSpeed: 0.05,
+            noiseSpeed: 0.0002,
+            varyNoiseSpeed: 0,
         },
         tendrils3: {
             target: 0,
@@ -411,8 +411,8 @@ export default (canvas, options) => {
         flowColor: [1, 1, 1, 0],
         fadeColor: [0, 0, 0, 0.05],
         spawn: {
-            radius: 0.5,
-            speed: 0.5
+            radius: 0.45,
+            speed: 10
         },
         opticalFlow: {
             ...opticalFlowDefaults,
@@ -465,29 +465,30 @@ export default (canvas, options) => {
         player.media.tracks.tendrils
             .to({
                 to: {
-                    colorMapAlpha: 1.1
+                    colorMapAlpha: 1
                 },
                 time: 14000,
-                ease: [0, 0.2, 0.2, 1]
+                ease: [0, 0.2, 0.2, 1.3, 1]
             });
 
         player.media.tracks.tendrils2
             .to({
                 to: {
                     // More wings
-                    noiseWeight: 0.004,
-                    varyNoise: -4,
+                    noiseWeight: 0.01,
+                    varyNoise: -1.2,
                     // Less wings
                     // noiseWeight: 0.002,
                     // varyNoise: 1,
-                    noiseScale: 2
+                    noiseScale: 1.8
                 },
                 time: 4000,
-                ease: [0, 0, 1, 1]
+                ease: [0, 0, 0.5, 1]
             })
             .smoothTo({
                 to: {
                     noiseWeight: 0.0002,
+                    varyNoise: -10,
                     noiseScale: 0.5
                 },
                 time: 10000,
@@ -497,26 +498,27 @@ export default (canvas, options) => {
         player.media.tracks.tendrils3
             .to({
                 to: {
-                    target: 0.0000001,
+                    target: 0.000001,
                     varyTarget: 10
                 },
-                time: 3000,
+                time: 3500,
                 ease: [0, 0, 0, 1]
             })
             .smoothTo({
                 to: {
-                    target: 0.00003,
-                    varyTarget: 60
+                    target: 0.0001,
+                    varyTarget: 80
                 },
-                time: 6000,
+                time: 7000,
                 ease: [0, 0, 0.6, 1]
             })
             .smoothTo({
                 to: {
-                    target: 0.0003
+                    target: 0.0004,
+                    varyTarget: 6
                 },
                 time: 11000,
-                ease: [0, 0, 0, 1]
+                ease: [0, 1, 1, 1]
             })
             .smoothTo({
                 to: {
@@ -524,7 +526,7 @@ export default (canvas, options) => {
                     varyTarget: 1
                 },
                 time: 14000,
-                ease: [0, 0, 0.7, 1]
+                ease: [0, 0, 0, 1]
             });
 
         player.media.tracks.baseColor
@@ -561,7 +563,7 @@ export default (canvas, options) => {
         player.media.tracks.opticalFlow
             .over(12000-6000, {
                 to: {
-                    speed: 0.05
+                    speed: 0.03
                 },
                 time: 12000,
                 ease: [0, 0, 0, 1]
