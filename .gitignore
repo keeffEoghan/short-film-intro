@@ -40,3 +40,6 @@ dist
 libs/build
 
 .DS_Store
+
+# Content can't be shared without permission
+/videos
